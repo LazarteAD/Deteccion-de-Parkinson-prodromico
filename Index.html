@@ -86,8 +86,21 @@ function regok(){const v=i=>document.getElementById(i).value.trim();if(!v("pid")
 function rec(){return{id:S.p.id,fecha:new Date().toISOString(),participante:S.p,cuestionario:S.a,digital:S.f,puntaje_heuristico:score().pts}}
 function saveLocal(){try{const l=JSON.parse(localStorage.getItem("pd_regs")||"[]");l.push(rec());localStorage.setItem("pd_regs",JSON.stringify(l));return l.length}catch(e){return 0}}
 function all(){try{return JSON.parse(localStorage.getItem("pd_regs")||"[]")}catch(e){return[]}}
-async function dl(name,data){let d=null;try{d=await window.claude.use("downloads")}catch(e){}
- if(d){try{await d.save({filename:name,data})}catch(e){}}else prompt("Copie los datos:",data)}
+function dl(name, data) {
+  try {
+    const blob = new Blob([data], { type: name.endsWith('.json') ? 'application/json' : 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    prompt("Copie los datos:", data);
+  }
+}
 function csv(){const L=all();const cols=new Set();L.forEach(r=>Object.entries(r.digital).forEach(([t,f])=>Object.keys(f).filter(k=>k!="raw").forEach(k=>cols.add(t+"_"+k))));
  const C=[...cols],h=["id","fecha","edad","sexo","mano_dominante","dx_previo","sitio",...Array.from({length:20},(_,i)=>"q"+(i+1)),...C];
  const row=r=>[r.id,r.fecha,r.participante.edad,r.participante.sexo,r.participante.mano_dominante,r.participante.dx_previo,r.participante.sitio,...r.cuestionario,...C.map(c=>{const m=c.match(/^(.*?)_([^_]+(?:_[^_]+)*)$/);for(const t of Object.keys(r.digital))if(c.startsWith(t+"_"))return r.digital[t][c.slice(t.length+1)]??"";return""})];
