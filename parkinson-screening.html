@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cribado digital de Parkinson</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f3f5f2;--fg:#17211d;--mut:#5d6b65;--card:#fff;--ac:#1f5f55;--acfg:#fff;--bd:#d3dbd6;--red:#b3261e;--amb:#a96a00;--ok:#2e7d4f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101715;--fg:#e8efec;--mut:#9aaba4;--card:#18221f;--ac:#5cc3b0;--acfg:#06201b;--bd:#2c3a36;--red:#ff8a80;--amb:#ffc062;--ok:#7bd69f}}
+:root[data-theme="dark"]{--bg:#101715;--fg:#e8efec;--mut:#9aaba4;--card:#18221f;--ac:#5cc3b0;--acfg:#06201b;--bd:#2c3a36;--red:#ff8a80;--amb:#ffc062;--ok:#7bd69f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "Source Serif 4",Georgia,serif}
+main{max-width:560px;margin:0 auto;padding:20px 16px 48px}
+h1{font:700 26px/1.2 "Trebuchet MS",system-ui,sans-serif;margin:0 0 8px}
+h2{font:700 19px/1.3 "Trebuchet MS",system-ui,sans-serif;margin:0 0 8px}
+p{margin:0 0 12px}.mut{color:var(--mut);font-size:14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin:0 0 14px}
+button{font:600 16px "Trebuchet MS",system-ui,sans-serif;border:1px solid var(--ac);background:var(--ac);color:var(--acfg);border-radius:10px;padding:13px 18px;min-height:48px;cursor:pointer}
+button.sec{background:transparent;color:var(--ac)}button:focus-visible{outline:3px solid var(--amb);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>button{flex:1}
+.bar{height:6px;background:var(--bd);border-radius:3px;margin:0 0 16px}.bar i{display:block;height:100%;background:var(--ac);border-radius:3px}
+.q{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--bd)}
+.q:last-child{border:0}.q span{flex:1}.q.rf span{border-left:4px solid var(--red);padding-left:8px}
+.yn{display:flex;gap:6px}.yn button{padding:8px 14px;min-height:42px}.yn button.on{background:var(--ac);color:var(--acfg)}.yn button:not(.on){background:transparent;color:var(--ac)}
+.big{font:700 44px "Trebuchet MS",sans-serif;text-align:center;margin:18px 0}
+#pad{display:flex;gap:24px;justify-content:center;margin:18px 0}
+.dot{width:110px;height:110px;border-radius:50%;border:3px solid var(--ac);background:transparent;touch-action:manipulation}.dot.n{background:var(--ac)}
+#pz{height:300px;border:2px dashed var(--bd);border-radius:12px;position:relative;touch-action:none;display:flex;align-items:center;justify-content:center}
+#tg{border:4px solid var(--ac);border-radius:50%}
+.flag{border-left:5px solid var(--red);padding:6px 10px;margin:6px 0;background:color-mix(in srgb,var(--red) 10%,transparent)}
+.lvl{font:700 22px "Trebuchet MS",sans-serif}
+table{width:100%;border-collapse:collapse;font-size:14px}td{padding:5px 4px;border-bottom:1px solid var(--bd)}td:last-child{text-align:right}
+</style></head><body><main id="app"></main>
+<script>
+const Q=[
+["Temblor en manos o piernas en reposo","m"],["Escritura más lenta o más pequeña","m"],["Más torpeza o lentitud en tareas finas (botones, abrir frascos, peinarse)","m"],
+["Voz más suave o monótona; otros piden que repita","m"],["Brazos que se balancean menos al caminar","m"],["Pasos cortos o arrastra los pies","m"],
+["Dificultad para empezar a caminar, se queda 'pegado' o al girar","m"],["Dificultad para impulsarse al caminar o para detenerse de inmediato","m"],
+["Dificultad para girar en la cama, levantarse de la cama o de una silla","m"],["Temblor, lentitud o rigidez que empezó de un solo lado","m"],
+["Habla, grita o se mueve mientras sueña, o se cayó de la cama dormido","n",2.8],["Somnolencia excesiva de día o se duerme haciendo actividades","n",2.7],
+["Siente que perdió olfato","n",6.4],["Estreñimiento crónico (menos de 3 deposiciones por semana, últimos 3 meses)","n",2.5],
+["Síntomas de depresión (llora con facilidad, pérdida de interés)","n",1.6],
+["Alucinaciones (ve u oye cosas que no están)","r","Alucinaciones tempranas → demencia con cuerpos de Lewy"],
+["Mareo al pararse que mejora al sentarse o acostarse","r","Hipotensión ortostática → atrofia multisistémica"],
+["Problemas urinarios (incontinencia, retención)","r","Disfunción urinaria precoz → atrofia multisistémica"],
+["Pensamiento, memoria o cálculo empeoró hace más de un año","r","Deterioro cognitivo → demencia con cuerpos de Lewy / síndrome corticobasal"],
+["Desequilibrio o caídas frecuentes desde el inicio de los síntomas","r","Caídas precoces → parálisis supranuclear progresiva"]];
+const S={a:[],f:{},step:0,hand:"",ts:null};
+const $=h=>document.getElementById("app").innerHTML=h;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const sd=a=>{const m=a.reduce((x,y)=>x+y,0)/a.length;return Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/a.length)};
+const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+const r2=x=>Math.round(x*100)/100;
+function bar(i,n){return `<div class="bar"><i style="width:${100*i/n}%"></i></div>`}
+const H=[["D","derecha"],["I","izquierda"]];
+const T=[
+{id:"vocal",t:"Voz: vocal sostenida",d:"Diga «Aaah» fuerte y sostenido durante 10 segundos, sin cortar para respirar.",k:"mic",s:10},
+{id:"frase",t:"Voz: frase",d:"Lea en voz alta, con naturalidad: <b>La abuela lleva a su nieto a comprar golosinas al mercado.</b>",k:"mic",s:8},
+...H.map(h=>({id:"reposo_"+h[0],t:"Temblor en reposo, mano "+h[1],d:"Sostenga el teléfono en la palma de la mano "+h[1]+", apoyada en el regazo y quieta. Se mide 20 s.",k:"imu",s:20})),
+...H.map(h=>({id:"postural_"+h[0],t:"Temblor postural, mano "+h[1],d:"Con el teléfono en la mano "+h[1]+", estire el brazo al frente contra la gravedad y manténgalo quieto 20 s.",k:"imu",s:20})),
+...H.map(h=>({id:"tap_"+h[0],t:"Golpeteo alterno, mano "+h[1],d:"Apoye el teléfono en una superficie plana. Con índice y medio de la mano "+h[1]+", toque alternando los círculos lo más rápido posible durante 10 s.",k:"tap",s:10})),
+{id:"pinch",t:"Pellizco al tamaño (mano dominante)",d:"Apoye el teléfono. Con pulgar e índice de la mano dominante, abra y cierre los dedos para igualar el círculo que cambia de tamaño. 12 s.",k:"pinch",s:12},
+{id:"marcha",t:"Marcha",d:"Guarde el teléfono en el bolsillo, camine 3 m en línea recta, gire y vuelva. Se mide 20 s.",k:"imu",s:20,pocket:1},
+{id:"equilibrio",t:"Equilibrio",d:"Guarde el teléfono en el bolsillo y quédese de pie, completamente quieto, 15 s.",k:"imu",s:15,pocket:1}];
+
+function intro(){$(`<h1>Cribado digital de Parkinson</h1>
+<p class="mut">Basado en el protocolo «Encuesta de riesgo de Parkinson» (Bhidayasiri et al., Front. Neurol. 2024). Para personas de 40 años o más.</p>
+<div class="card"><h2>Antes de empezar</h2>
+<p>Esta herramienta <b>no diagnostica</b>. Detecta señales que justifican una consulta con un neurólogo. Los datos se guardan solo en este dispositivo, identificados con un código (sin nombre), y no se envían a ningún servidor.</p><p class="mut">Uso en investigación: el consentimiento formal y la hoja de información deben ser los aprobados por su comité de ética (Ley 25.326 de protección de datos personales).</p>
+<p class="mut">Necesitará permiso de micrófono y de sensores de movimiento. Dure unos 10 minutos.</p>
+<label><input type="checkbox" id="ok"> El participante recibió la hoja de información y firmó el consentimiento informado</label></div>
+<button onclick="go()">Comenzar</button>`)}
+async function go(){if(!document.getElementById("ok").checked)return alert("Marque la casilla para continuar.");
+ try{if(typeof DeviceMotionEvent!=="undefined"&&DeviceMotionEvent.requestPermission)await DeviceMotionEvent.requestPermission()}catch(e){}
+ S.a=[];S.f={};reg()}
+function reg(){$(`<h1>Datos del participante</h1><div class="card">
+<p><label>Código del participante<br><input id="pid" style="width:100%;padding:10px;font-size:16px"></label></p>
+<p><label>Edad<br><input id="pe" type="number" inputmode="numeric" style="width:100%;padding:10px;font-size:16px"></label></p>
+<p><label>Sexo<br><select id="ps" style="width:100%;padding:10px;font-size:16px"><option>F</option><option>M</option><option>Otro</option></select></label></p>
+<p><label>Mano dominante<br><select id="ph" style="width:100%;padding:10px;font-size:16px"><option>Derecha</option><option>Izquierda</option></select></label></p>
+<p><label>Diagnóstico de Parkinson conocido<br><select id="pd" style="width:100%;padding:10px;font-size:16px"><option>No</option><option>Sí</option><option>No sé</option></select></label></p>
+<p><label>Sitio o evaluador<br><input id="pc" style="width:100%;padding:10px;font-size:16px"></label></p></div>
+<button onclick="regok()">Continuar al cuestionario</button>`)}
+function regok(){const v=i=>document.getElementById(i).value.trim();if(!v("pid"))return alert("Ingrese el código del participante.");
+ const e=+v("pe");if(!e||e<18)return alert("Ingrese una edad válida.");if(e<40&&!confirm("El protocolo apunta a personas de 40 años o más. ¿Continuar igual?"))return;
+ S.p={id:v("pid"),edad:e,sexo:v("ps"),mano_dominante:v("ph"),dx_previo:v("pd"),sitio:v("pc")};quiz()}
+function rec(){return{id:S.p.id,fecha:new Date().toISOString(),participante:S.p,cuestionario:S.a,digital:S.f,puntaje_heuristico:score().pts}}
+function saveLocal(){try{const l=JSON.parse(localStorage.getItem("pd_regs")||"[]");l.push(rec());localStorage.setItem("pd_regs",JSON.stringify(l));return l.length}catch(e){return 0}}
+function all(){try{return JSON.parse(localStorage.getItem("pd_regs")||"[]")}catch(e){return[]}}
+async function dl(name,data){let d=null;try{d=await window.claude.use("downloads")}catch(e){}
+ if(d){try{await d.save({filename:name,data})}catch(e){}}else prompt("Copie los datos:",data)}
+function csv(){const L=all();const cols=new Set();L.forEach(r=>Object.entries(r.digital).forEach(([t,f])=>Object.keys(f).filter(k=>k!="raw").forEach(k=>cols.add(t+"_"+k))));
+ const C=[...cols],h=["id","fecha","edad","sexo","mano_dominante","dx_previo","sitio",...Array.from({length:20},(_,i)=>"q"+(i+1)),...C];
+ const row=r=>[r.id,r.fecha,r.participante.edad,r.participante.sexo,r.participante.mano_dominante,r.participante.dx_previo,r.participante.sitio,...r.cuestionario,...C.map(c=>{const m=c.match(/^(.*?)_([^_]+(?:_[^_]+)*)$/);for(const t of Object.keys(r.digital))if(c.startsWith(t+"_"))return r.digital[t][c.slice(t.length+1)]??"";return""})];
+ return[h,...L.map(row)].map(a=>a.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(",")).join("\n")}
+
+function quiz(){let h=bar(0,T.length)+`<h1>Cuestionario</h1><p class="mut">¿Ha notado alguno de estos síntomas? Los ítems con borde rojo son señales de alerta.</p><div class="card">`;
+ Q.forEach((q,i)=>{h+=`<div class="q ${q[1]=="r"?"rf":""}"><span>${i+1}. ${q[0]}</span><div class="yn"><button class="${S.a[i]===1?"on":""}" onclick="ans(${i},1)">Sí</button><button class="${S.a[i]===0?"on":""}" onclick="ans(${i},0)">No</button></div></div>`});
+ $(h+`</div><button onclick="qdone()">Continuar a las pruebas</button>`);}
+function ans(i,v){const y=scrollY;S.a[i]=v;quiz();scrollTo(0,y)}
+function qdone(){for(let i=0;i<20;i++)if(S.a[i]===undefined)return alert("Falta responder la pregunta "+(i+1));S.step=0;test()}
+function test(){const t=T[S.step];$(bar(S.step+1,T.length)+`<h1>${t.t}</h1><div class="card"><p>${t.d}</p>${t.pocket?'<p class="mut">Al tocar «Iniciar» tendrá 5 s para guardar el teléfono.</p>':""}</div><div class="row"><button onclick="run()">Iniciar</button><button class="sec" onclick="skip()">Omitir</button></div>`)}
+function skip(){next()}
+function next(){S.step++;S.step>=T.length?result():test()}
+async function count(n,msg){for(let i=n;i>0;i--){$(`<h1>${msg}</h1><div class="big">${i}</div>`);await sleep(1000)}}
+async function run(){const t=T[S.step];await count(t.pocket?5:3,t.pocket?"Guarde el teléfono":"Prepárese");
+ try{let f;if(t.k=="mic")f=await mic(t);else if(t.k=="imu")f=await imu(t);else if(t.k=="tap")f=await tap(t);else f=await pinch(t);
+ if(f){S.f[t.id]=f;beep()}}catch(e){alert("No se pudo completar la prueba: "+e.message)}next()}
+function beep(){try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();o.stop(c.currentTime+.25);navigator.vibrate&&navigator.vibrate(200)}catch(e){}}
+function timer(t,m){$(`<h1>${m}</h1><div class="big" id="tm">${t.s}</div><p class="mut" style="text-align:center">Mantenga la prueba hasta oír el tono.</p>`);
+ let n=t.s;const iv=setInterval(()=>{n--;const e=document.getElementById("tm");if(e)e.textContent=Math.max(n,0);if(n<=0)clearInterval(iv)},1000)}
+async function mic(t){const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false}});
+ const c=new AudioContext(),src=c.createMediaStreamSource(st),an=c.createAnalyser();an.fftSize=2048;src.connect(an);
+ const b=new Float32Array(2048),rms=[],f0=[];timer(t,"Grabando…");const end=Date.now()+t.s*1000;
+ while(Date.now()<end){an.getFloatTimeDomainData(b);const r=Math.sqrt(b.reduce((x,y)=>x+y*y,0)/b.length);rms.push(r);
+  if(r>0.02){let best=0,bl=0;for(let l=Math.floor(c.sampleRate/400);l<=Math.floor(c.sampleRate/70);l++){let s=0;for(let i=0;i<1024;i++)s+=b[i]*b[i+l];if(s>best){best=s;bl=l}}if(bl)f0.push(c.sampleRate/bl)}
+  await sleep(50)}
+ st.getTracks().forEach(x=>x.stop());c.close();const v=rms.filter(x=>x>0.02);
+ if(v.length<10){alert("Casi no se oyó voz. Acerque el teléfono y repita.");return null}
+ return{f0_media:r2(mean(f0)),f0_cv:r2(sd(f0)/mean(f0)),rms_cv:r2(sd(v)/mean(v)),voz_pct:r2(v.length/rms.length)}}
+function dft(x,fs,lo,hi){let best=0,bf=0,tot=0,band=0;const n=x.length;for(let f=0.5;f<=15;f+=0.25){let re=0,im=0;for(let i=0;i<n;i++){const a=2*Math.PI*f*i/fs;re+=x[i]*Math.cos(a);im+=x[i]*Math.sin(a)}const p=(re*re+im*im)/n;tot+=p;if(f>=lo&&f<=hi)band+=p;if(p>best){best=p;bf=f}}return{pico:bf,banda:tot?band/tot:0}}
+async function imu(t){if(!window.DeviceMotionEvent)throw new Error("Este dispositivo no tiene sensores de movimiento.");
+ const d=[];const h=e=>{const a=e.accelerationIncludingGravity;if(a&&a.x!=null)d.push([Date.now(),Math.hypot(a.x,a.y,a.z)])};
+ addEventListener("devicemotion",h);timer(t,"Midiendo…");await sleep(t.s*1000);removeEventListener("devicemotion",h);
+ if(d.length<40)throw new Error("No se recibieron datos del sensor (¿permiso denegado?).");
+ const fs=d.length/((d.at(-1)[0]-d[0][0])/1000),m=mean(d.map(x=>x[1])),x=d.map(y=>y[1]-m).slice(0,1500),rms=Math.sqrt(mean(x.map(y=>y*y)));
+ const sp=dft(x,fs,1,3.5),tr=dft(x,fs,4,6.5);
+ if(t.id=="marcha")return{rms:r2(rms),cadencia_hz:r2(sp.pico),fs:Math.round(fs),raw:x.map(v=>r2(v))};
+ if(t.id=="equilibrio")return{balanceo_rms:r2(rms),fs:Math.round(fs),raw:x.map(v=>r2(v))};
+ return{rms:r2(rms),pico_hz:r2(tr.pico),banda_4_6:r2(tr.banda),fs:Math.round(fs),raw:x.map(v=>r2(v))}}
+function tap(t){return new Promise(res=>{$(`<h1>Toque alternando</h1><div class="big" id="tm">${t.s}</div><div id="pad"><button class="dot" id="d0"></button><button class="dot" id="d1"></button></div>`);
+ let last=-1,ts=[],err=0;const nx=()=>{document.getElementById("d0").classList.toggle("n",last!=0);document.getElementById("d1").classList.toggle("n",last==0)};
+ const s=Date.now();let n=t.s;const iv=setInterval(()=>{n--;const e=document.getElementById("tm");if(e)e.textContent=Math.max(n,0)},1000);
+ [0,1].forEach(i=>document.getElementById("d"+i).addEventListener("pointerdown",()=>{if(i==last){err++;return}last=i;ts.push(Date.now());nx()}));
+ last=1;nx();
+ setTimeout(()=>{clearInterval(iv);const iv2=[];for(let i=1;i<ts.length;i++)iv2.push(ts[i]-ts[i-1]);
+  res({toques:ts.length,toques_s:r2(ts.length/t.s),cv_intervalo:iv2.length>2?r2(sd(iv2)/mean(iv2)):null,errores:err,raw:ts.map(v=>v-ts[0])})},t.s*1000)})}
+function pinch(t){return new Promise(res=>{$(`<h1>Pellizque al tamaño</h1><div class="big" id="tm">${t.s}</div><div id="pz"><div id="tg"></div></div><p class="mut" style="text-align:center">Use dos dedos dentro del recuadro.</p>`);
+ const pz=document.getElementById("pz"),tg=document.getElementById("tg"),s0=Date.now(),er=[];let cur=null,n=t.s;
+ const iv=setInterval(()=>{n--;const e=document.getElementById("tm");if(e)e.textContent=Math.max(n,0)},1000);
+ const D=()=>60+50*(1+Math.sin((Date.now()-s0)/1000*1.6))/2*2;let raf;const loop=()=>{const d=D();tg.style.width=tg.style.height=d+"px";if(cur!=null)er.push(Math.abs(cur-d)/d);raf=requestAnimationFrame(loop)};loop();
+ pz.addEventListener("touchmove",e=>{if(e.touches.length>=2){const a=e.touches[0],b=e.touches[1];cur=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}},{passive:true});
+ pz.addEventListener("touchend",()=>{cur=null});
+ setTimeout(()=>{cancelAnimationFrame(raf);clearInterval(iv);if(er.length<20){alert("No se detectó pellizco con dos dedos.");res(null)}else res({error_rel:r2(mean(er)),muestras:er.length})},t.s*1000)})}
+
+/* Puntaje heurístico (NO es el modelo Random Forest del paper: requiere datos de entrenamiento). Umbrales provisionales. */
+function score(){const a=S.a,mot=a.slice(0,10).reduce((x,y)=>x+y,0);
+ let nl=0,nt=0;for(let i=10;i<15;i++){nt+=Math.log(Q[i][2]);if(a[i])nl+=Math.log(Q[i][2])}
+ const flags=[];const F=S.f;const g=k=>["_D","_I"].map(h=>F[k+h]).filter(Boolean);
+ if(g("reposo").some(x=>x.pico_hz>=4&&x.pico_hz<=6.5&&x.banda_4_6>0.35))flags.push("Temblor en reposo con frecuencia 4–6 Hz");
+ if(g("postural").some(x=>x.pico_hz>=4&&x.pico_hz<=8&&x.banda_4_6>0.45))flags.push("Temblor postural con pico en banda parkinsoniana");
+ if(g("tap").some(x=>x.toques_s<3||x.cv_intervalo>0.35||x.errores>5))flags.push("Golpeteo alterno lento o irregular");
+ if(F.pinch&&F.pinch.error_rel>0.35)flags.push("Pellizco poco ajustado al objetivo");
+ if(F.vocal&&(F.vocal.f0_cv>0.12||F.vocal.rms_cv>0.35))flags.push("Voz sostenida inestable");
+ if(F.frase&&F.frase.voz_pct<0.35)flags.push("Habla con muchas pausas o baja intensidad");
+ if(F.marcha&&F.marcha.cadencia_hz&&F.marcha.cadencia_hz<1.4)flags.push("Cadencia de marcha baja");
+ if(F.equilibrio&&F.equilibrio.balanceo_rms>0.35)flags.push("Balanceo aumentado en bipedestación");
+ const pts=mot/10*45+nl/nt*15+Math.min(flags.length,5)/5*40;
+ const rf=Q.map((q,i)=>[q,i]).filter(x=>x[0][1]=="r"&&a[x[1]]);
+ return{mot,pts:Math.round(pts),flags,rf,lvl:pts>=50?["Riesgo alto","var(--red)"]:pts>=25?["Riesgo intermedio","var(--amb)"]:["Riesgo bajo","var(--ok)"]}}
+function result(){const r=score(),n=Object.keys(S.f).length,tot=saveLocal();
+ let h=`<h1>Resultado</h1><div class="card"><div class="lvl" style="color:${r.lvl[1]}">${r.lvl[0]}</div><p class="mut">Puntaje ${r.pts}/100 · síntomas motores: ${r.mot}/10 · pruebas completadas: ${n}/${T.length}</p>
+ <p>${r.pts>=25?"Se recomienda una consulta con un neurólogo o especialista en trastornos del movimiento para evaluación clínica.":"No se detectaron señales relevantes. Si nota síntomas nuevos, consulte a su médico."}</p></div>`;
+ h+=`<div class="card"><h2>Mapa de banderas rojas</h2>`+(r.rf.length?`<p class="mut">Señales que orientan a parkinsonismo atípico y no a Parkinson típico. Mencionelas al especialista.</p>`+r.rf.map(x=>`<div class="flag"><b>${x[0][0]}</b><br><span class="mut">${x[0][2]}</span></div>`).join(""):`<p class="mut">No marcó ninguna de las 5 banderas rojas (preguntas 16–20).</p>`)+`</div>`;
+ h+=`<div class="card"><h2>Hallazgos digitales</h2>`+(r.flags.length?r.flags.map(x=>`<div class="flag">${x}</div>`).join(""):`<p class="mut">Sin hallazgos fuera de rango en las pruebas realizadas.</p>`)+`</div>`;
+ h+=`<div class="card"><h2>Medidas crudas</h2><table>`+Object.entries(S.f).map(([k,v])=>`<tr><td>${k}</td><td>${Object.entries(v).filter(e=>e[0]!="raw").map(e=>e.join(": ")).join(" · ")}</td></tr>`).join("")+`</table></div>
+ <p class="mut">El puntaje usa umbrales provisionales y no está validado. El objetivo de la app en investigación es recolectar datos (CSV y señales crudas) para entrenar y validar su propio clasificador.</p>
+ <p class="mut">Registro guardado en este dispositivo (${tot} en total). Exporte con frecuencia: si borra los datos del navegador, se pierden.</p><div class="row"><button onclick="dl('pd_resumen.csv',csv())">Exportar CSV (todos)</button><button class="sec" onclick="dl('pd_'+S.p.id+'_completo.json',JSON.stringify(rec()))">JSON con señales crudas</button></div><div class="row" style="margin-top:10px"><button class="sec" onclick="S.p=null;intro()">Nuevo participante</button></div>`;$(h)}
+function cp(){const j=JSON.stringify({fecha:new Date().toISOString(),cuestionario:S.a,digital:S.f},null,1);navigator.clipboard?navigator.clipboard.writeText(j).then(()=>alert("Copiado.")).catch(()=>prompt("Copie:",j)):prompt("Copie:",j)}
+intro();
+</script></body></html>
